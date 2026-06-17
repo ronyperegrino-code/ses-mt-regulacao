@@ -4,3 +4,327 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mapa de Regulação SES-MT</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{background:linear-gradient(135deg,#1e3a5f 0%,#2d6a9f 100%);padding:10px 20px;display:flex;align-items:center;gap:15px;box-shadow:0 2px 10px rgba(0,0,0,.5);z-index:1000;flex-shrink:0}
+header img{height:50px}
+.header-text h1{font-size:1.2rem;font-weight:700;color:#fff}
+.header-text p{font-size:.75rem;color:#94b8d6}
+.main-container{display:flex;flex:1;overflow:hidden}
+#map{flex:1;z-index:1}
+.sidebar{width:380px;background:#1e293b;overflow-y:auto;display:flex;flex-direction:column;border-left:1px solid #334155;z-index:100}
+.filter-panel{padding:15px;border-bottom:1px solid #334155;background:#162032}
+.filter-panel h3{font-size:.85rem;color:#60a5fa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+.filter-group{margin-bottom:10px}
+.filter-group label{display:block;font-size:.75rem;color:#94a3b8;margin-bottom:4px}
+.filter-group select{width:100%;padding:7px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;font-size:.8rem;cursor:pointer}
+.filter-group select:focus{outline:none;border-color:#3b82f6}
+.stats-bar{display:flex;gap:8px;padding:12px 15px;background:#162032;border-bottom:1px solid #334155;flex-wrap:wrap}
+.stat-card{flex:1;min-width:80px;background:#0f172a;border-radius:8px;padding:8px 10px;text-align:center;border:1px solid #334155}
+.stat-card .value{font-size:1.3rem;font-weight:700;color:#60a5fa}
+.stat-card .label{font-size:.65rem;color:#64748b;text-transform:uppercase}
+.hospitals-list{flex:1;overflow-y:auto;padding:10px}
+.hospital-card{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:all .2s}
+.hospital-card:hover{border-color:#3b82f6;background:#1e293b;transform:translateY(-1px)}
+.hospital-card.selected{border-color:#60a5fa;background:#1e3a5f}
+.hospital-card h4{font-size:.82rem;font-weight:600;color:#e2e8f0;margin-bottom:6px;line-height:1.3}
+.hospital-card .meta{display:flex;flex-wrap:wrap;gap:4px}
+.badge{font-size:.65rem;padding:2px 7px;border-radius:12px;font-weight:500}
+.badge-regional{background:#1e3a5f;color:#60a5fa;border:1px solid #2d6a9f}
+.badge-porte{background:#1a2e1a;color:#4ade80;border:1px solid #166534}
+.badge-tipo{background:#2d1a3d;color:#c084fc;border:1px solid #7c3aed}
+.badge-leitos{background:#2d2a0e;color:#fbbf24;border:1px solid #92400e}
+.hospital-card .regulacao{margin-top:8px;font-size:.7rem;color:#94a3b8}
+.hospital-card .regulacao strong{color:#60a5fa}
+.detail-panel{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid #3b82f6;border-radius:12px;padding:20px;width:500px;max-width:90vw;z-index:1000;box-shadow:0 20px 60px rgba(0,0,0,.8);display:none}
+.detail-panel.visible{display:block}
+.detail-panel h3{font-size:1rem;color:#60a5fa;margin-bottom:12px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.detail-item label{display:block;font-size:.65rem;color:#64748b;text-transform:uppercase}
+.detail-item span{font-size:.82rem;color:#e2e8f0;font-weight:500}
+.regulacao-matrix{margin-top:10px}
+.regulacao-matrix h4{font-size:.75rem;color:#94a3b8;margin-bottom:6px}
+.matrix-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.matrix-cell{background:#0f172a;border-radius:6px;padding:6px;text-align:center;border:1px solid #334155}
+.matrix-cell .esp{font-size:.6rem;color:#64748b;margin-bottom:2px}
+.matrix-cell .nivel{font-size:.75rem;font-weight:700}
+.nivel-1{color:#4ade80}
+.nivel-2{color:#fbbf24}
+.nivel-3{color:#f87171}
+.nivel-nc{color:#64748b}
+.close-btn{position:absolute;top:10px;right:12px;background:none;border:none;color:#64748b;font-size:1.2rem;cursor:pointer;line-height:1}
+.close-btn:hover{color:#e2e8f0}
+.leaflet-popup-content-wrapper{background:#1e293b;border:1px solid #334155;border-radius:10px;color:#e2e8f0}
+.leaflet-popup-tip{background:#1e293b}
+.popup-title{font-size:.9rem;font-weight:700;color:#60a5fa;margin-bottom:6px}
+.popup-info{font-size:.75rem;color:#94a3b8;line-height:1.6}
+.popup-info strong{color:#e2e8f0}
+.search-box{padding:10px 15px;border-bottom:1px solid #334155}
+.search-box input{width:100%;padding:8px 12px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#e2e8f0;font-size:.8rem}
+.search-box input::placeholder{color:#475569}
+.search-box input:focus{outline:none;border-color:#3b82f6}
+.legend{position:absolute;bottom:30px;right:400px;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px 15px;z-index:500;font-size:.72rem}
+.legend h4{color:#60a5fa;margin-bottom:8px;font-size:.75rem}
+.legend-item{display:flex;align-items:center;gap:8px;margin-bottom:4px;color:#94a3b8}
+.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+</style>
+</head>
+<body>
+<header>
+<div class="header-text">
+<h1>🏥 Mapa de Regulação Assistencial — SES-MT</h1>
+<p>Sistema Estadual de Regulação | Mato Grosso | 16 Regionais de Saúde</p>
+</div>
+</header>
+<div class="main-container">
+<div id="map"></div>
+<div class="sidebar">
+<div class="filter-panel">
+<h3>🔍 Filtros</h3>
+<div class="filter-group">
+<label>Regional de Saúde</label>
+<select id="filtroRegional" onchange="aplicarFiltros()">
+<option value="">Todas as Regionais</option>
+</select>
+</div>
+<div class="filter-group">
+<label>Tipo de Unidade</label>
+<select id="filtroTipo" onchange="aplicarFiltros()">
+<option value="">Todos os Tipos</option>
+<option value="Hospital Geral">Hospital Geral</option>
+<option value="Hospital Especializado">Hospital Especializado</option>
+<option value="UPA">UPA</option>
+<option value="Santa Casa">Santa Casa</option>
+<option value="Hospital Universitário">Hospital Universitário</option>
+<option value="Hospital Municipal">Hospital Municipal</option>
+<option value="Maternidade">Maternidade</option>
+</select>
+</div>
+<div class="filter-group">
+<label>Porte</label>
+<select id="filtroPorte" onchange="aplicarFiltros()">
+<option value="">Todos os Portes</option>
+<option value="Grande">Grande (200+ leitos)</option>
+<option value="Médio">Médio (50-199 leitos)</option>
+<option value="Pequeno">Pequeno (&lt;50 leitos)</option>
+</select>
+</div>
+<div class="filter-group">
+<label>Especialidade Regulada</label>
+<select id="filtroEspecialidade" onchange="aplicarFiltros()">
+<option value="">Todas as Especialidades</option>
+<option value="UTI Adulto">UTI Adulto</option>
+<option value="UTI Neonatal">UTI Neonatal</option>
+<option value="Cardiologia">Cardiologia</option>
+<option value="Neurologia">Neurologia</option>
+<option value="Oncologia">Oncologia</option>
+<option value="Ortopedia">Ortopedia</option>
+<option value="Obstetrícia">Obstetrícia</option>
+<option value="Pediatria">Pediatria</option>
+<option value="Trauma">Trauma</option>
+<option value="Queimados">Queimados</option>
+</select>
+</div>
+</div>
+<div class="search-box">
+<input type="text" id="busca" placeholder="🔎 Buscar unidade..." oninput="aplicarFiltros()">
+</div>
+<div class="stats-bar">
+<div class="stat-card"><div class="value" id="totalUnidades">0</div><div class="label">Unidades</div></div>
+<div class="stat-card"><div class="value" id="totalLeitos">0</div><div class="label">Leitos</div></div>
+<div class="stat-card"><div class="value" id="totalRegionais">0</div><div class="label">Regionais</div></div>
+</div>
+<div class="hospitals-list" id="hospitalsList"></div>
+</div>
+</div>
+<div class="legend">
+<h4>Legenda — Porte</h4>
+<div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Grande (200+ leitos)</div>
+<div class="legend-item"><div class="legend-dot" style="background:#f97316"></div>Médio (50-199 leitos)</div>
+<div class="legend-item"><div class="legend-dot" style="background:#eab308"></div>Pequeno (&lt;50 leitos)</div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const hospitais = [
+{"id":1,"nome":"Hospital Geral Universitário — HGU","municipio":"Cuiabá","regional":"1ª Regional — Cuiabá","tipo":"Hospital Universitário","porte":"Grande","leitos":360,"lat":-15.601,"lng":-56.097,"regulacao":{"UTI Adulto":"N1","UTI Neonatal":"N1","Cardiologia":"N1","Neurologia":"N1","Oncologia":"N2","Ortopedia":"N1","Obstetrícia":"N1","Pediatria":"N1","Trauma":"N1","Queimados":"N2"}},
+{"id":2,"nome":"Hospital e Pronto-Socorro Municipal de Cuiabá","municipio":"Cuiabá","regional":"1ª Regional — Cuiabá","tipo":"Hospital Municipal","porte":"Grande","leitos":280,"lat":-15.596,"lng":-56.101,"regulacao":{"UTI Adulto":"N1","UTI Neonatal":"N2","Cardiologia":"N2","Neurologia":"N2","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N1","Queimados":"N3"}},
+{"id":3,"nome":"Santa Casa de Misericórdia de Cuiabá","municipio":"Cuiabá","regional":"1ª Regional — Cuiabá","tipo":"Santa Casa","porte":"Grande","leitos":320,"lat":-15.590,"lng":-56.093,"regulacao":{"UTI Adulto":"N1","UTI Neonatal":"N1","Cardiologia":"N1","Neurologia":"N2","Oncologia":"N1","Ortopedia":"N1","Obstetrícia":"N1","Pediatria":"N1","Trauma":"N2","Queimados":"NC"}},
+{"id":4,"nome":"Hospital Beneficente São Lucas","municipio":"Cuiabá","regional":"1ª Regional — Cuiabá","tipo":"Hospital Especializado","porte":"Médio","leitos":120,"lat":-15.605,"lng":-56.088,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"NC","Cardiologia":"N1","Neurologia":"N1","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"NC","Pediatria":"NC","Trauma":"NC","Queimados":"NC"}},
+{"id":5,"nome":"UPA Norte — Cuiabá","municipio":"Cuiabá","regional":"1ª Regional — Cuiabá","tipo":"UPA","porte":"Pequeno","leitos":30,"lat":-15.580,"lng":-56.105,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"NC","Obstetrícia":"NC","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":6,"nome":"Hospital Municipal de Várzea Grande","municipio":"Várzea Grande","regional":"1ª Regional — Cuiabá","tipo":"Hospital Municipal","porte":"Médio","leitos":150,"lat":-15.646,"lng":-56.131,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N2","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":7,"nome":"Hospital Regional de Rondonópolis","municipio":"Rondonópolis","regional":"2ª Regional — Rondonópolis","tipo":"Hospital Geral","porte":"Grande","leitos":245,"lat":-16.467,"lng":-54.636,"regulacao":{"UTI Adulto":"N1","UTI Neonatal":"N1","Cardiologia":"N2","Neurologia":"N2","Oncologia":"N2","Ortopedia":"N1","Obstetrícia":"N1","Pediatria":"N1","Trauma":"N1","Queimados":"N3"}},
+{"id":8,"nome":"Santa Casa de Rondonópolis","municipio":"Rondonópolis","regional":"2ª Regional — Rondonópolis","tipo":"Santa Casa","porte":"Médio","leitos":180,"lat":-16.472,"lng":-54.641,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N2","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":9,"nome":"Hospital Municipal de Rondonópolis","municipio":"Rondonópolis","regional":"2ª Regional — Rondonópolis","tipo":"Hospital Municipal","porte":"Médio","leitos":90,"lat":-16.460,"lng":-54.628,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":10,"nome":"Hospital Regional de Sinop","municipio":"Sinop","regional":"3ª Regional — Sinop","tipo":"Hospital Geral","porte":"Grande","leitos":210,"lat":-11.861,"lng":-55.507,"regulacao":{"UTI Adulto":"N1","UTI Neonatal":"N1","Cardiologia":"N2","Neurologia":"N2","Oncologia":"N2","Ortopedia":"N1","Obstetrícia":"N1","Pediatria":"N1","Trauma":"N1","Queimados":"NC"}},
+{"id":11,"nome":"Hospital Municipal de Sinop","municipio":"Sinop","regional":"3ª Regional — Sinop","tipo":"Hospital Municipal","porte":"Médio","leitos":110,"lat":-11.868,"lng":-55.515,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N3","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":12,"nome":"Hospital e Maternidade Madre Theodora","municipio":"Sinop","regional":"3ª Regional — Sinop","tipo":"Maternidade","porte":"Médio","leitos":80,"lat":-11.855,"lng":-55.500,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"N1","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"NC","Obstetrícia":"N1","Pediatria":"N2","Trauma":"NC","Queimados":"NC"}},
+{"id":13,"nome":"Hospital Regional de Tangará da Serra","municipio":"Tangará da Serra","regional":"4ª Regional — Tangará da Serra","tipo":"Hospital Geral","porte":"Médio","leitos":140,"lat":-14.621,"lng":-57.501,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N2","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":14,"nome":"Santa Casa de Tangará da Serra","municipio":"Tangará da Serra","regional":"4ª Regional — Tangará da Serra","tipo":"Santa Casa","porte":"Médio","leitos":95,"lat":-14.628,"lng":-57.510,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"N3","Cardiologia":"N3","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":15,"nome":"Hospital Regional de Diamantino","municipio":"Diamantino","regional":"5ª Regional — Diamantino","tipo":"Hospital Geral","porte":"Pequeno","leitos":45,"lat":-14.407,"lng":-56.445,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":16,"nome":"Hospital Regional de Alta Floresta","municipio":"Alta Floresta","regional":"6ª Regional — Alta Floresta","tipo":"Hospital Geral","porte":"Médio","leitos":160,"lat":-9.876,"lng":-56.086,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N2","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":17,"nome":"Santa Casa de Alta Floresta","municipio":"Alta Floresta","regional":"6ª Regional — Alta Floresta","tipo":"Santa Casa","porte":"Pequeno","leitos":60,"lat":-9.882,"lng":-56.092,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":18,"nome":"Hospital Regional de Juara","municipio":"Juara","regional":"7ª Regional — Juara","tipo":"Hospital Geral","porte":"Pequeno","leitos":50,"lat":-11.257,"lng":-57.528,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":19,"nome":"Hospital Regional de Barra do Garças","municipio":"Barra do Garças","regional":"8ª Regional — Barra do Garças","tipo":"Hospital Geral","porte":"Médio","leitos":130,"lat":-15.889,"lng":-52.257,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N3","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":20,"nome":"Santa Casa de Barra do Garças","municipio":"Barra do Garças","regional":"8ª Regional — Barra do Garças","tipo":"Santa Casa","porte":"Pequeno","leitos":55,"lat":-15.895,"lng":-52.263,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":21,"nome":"Hospital Regional de Cáceres","municipio":"Cáceres","regional":"9ª Regional — Cáceres","tipo":"Hospital Geral","porte":"Médio","leitos":170,"lat":-16.070,"lng":-57.681,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N2","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":22,"nome":"Santa Casa de Cáceres","municipio":"Cáceres","regional":"9ª Regional — Cáceres","tipo":"Santa Casa","porte":"Médio","leitos":100,"lat":-16.076,"lng":-57.688,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"N3","Cardiologia":"N3","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":23,"nome":"Hospital Regional de Colíder","municipio":"Colíder","regional":"10ª Regional — Colíder","tipo":"Hospital Geral","porte":"Pequeno","leitos":45,"lat":-10.814,"lng":-55.453,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":24,"nome":"Hospital Regional de Peixoto de Azevedo","municipio":"Peixoto de Azevedo","regional":"11ª Regional — Peixoto de Azevedo","tipo":"Hospital Geral","porte":"Pequeno","leitos":40,"lat":-10.218,"lng":-54.982,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":25,"nome":"Hospital Regional de Guarantã do Norte","municipio":"Guarantã do Norte","regional":"11ª Regional — Peixoto de Azevedo","tipo":"Hospital Geral","porte":"Pequeno","leitos":35,"lat":-9.794,"lng":-54.899,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":26,"nome":"Hospital Regional de Sorriso","municipio":"Sorriso","regional":"12ª Regional — Sorriso","tipo":"Hospital Geral","porte":"Médio","leitos":120,"lat":-12.544,"lng":-55.719,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N3","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":27,"nome":"Hospital Municipal de Sorriso","municipio":"Sorriso","regional":"12ª Regional — Sorriso","tipo":"Hospital Municipal","porte":"Pequeno","leitos":50,"lat":-12.550,"lng":-55.726,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":28,"nome":"Hospital Regional de Lucas do Rio Verde","municipio":"Lucas do Rio Verde","regional":"13ª Regional — Lucas do Rio Verde","tipo":"Hospital Geral","porte":"Médio","leitos":100,"lat":-13.057,"lng":-55.914,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N3","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":29,"nome":"Hospital Regional de Nova Mutum","municipio":"Nova Mutum","regional":"13ª Regional — Lucas do Rio Verde","tipo":"Hospital Geral","porte":"Pequeno","leitos":48,"lat":-13.830,"lng":-56.079,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":30,"nome":"Hospital Regional de Confresa","municipio":"Confresa","regional":"14ª Regional — Confresa","tipo":"Hospital Geral","porte":"Pequeno","leitos":40,"lat":-10.640,"lng":-51.565,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":31,"nome":"Hospital Regional de São Félix do Araguaia","municipio":"São Félix do Araguaia","regional":"14ª Regional — Confresa","tipo":"Hospital Geral","porte":"Pequeno","leitos":35,"lat":-11.617,"lng":-50.664,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":32,"nome":"Hospital Regional de Água Boa","municipio":"Água Boa","regional":"15ª Regional — Água Boa","tipo":"Hospital Geral","porte":"Pequeno","leitos":42,"lat":-14.027,"lng":-52.161,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":33,"nome":"Hospital Regional de Primavera do Leste","municipio":"Primavera do Leste","regional":"16ª Regional — Primavera do Leste","tipo":"Hospital Geral","porte":"Médio","leitos":90,"lat":-15.558,"lng":-54.282,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"N2","Cardiologia":"N3","Neurologia":"N3","Oncologia":"NC","Ortopedia":"N2","Obstetrícia":"N2","Pediatria":"N2","Trauma":"N2","Queimados":"NC"}},
+{"id":34,"nome":"Hospital Municipal de Primavera do Leste","municipio":"Primavera do Leste","regional":"16ª Regional — Primavera do Leste","tipo":"Hospital Municipal","porte":"Pequeno","leitos":40,"lat":-15.564,"lng":-54.290,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":35,"nome":"Hospital Regional de Campo Verde","municipio":"Campo Verde","regional":"16ª Regional — Primavera do Leste","tipo":"Hospital Geral","porte":"Pequeno","leitos":45,"lat":-15.545,"lng":-55.165,"regulacao":{"UTI Adulto":"N3","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":36,"nome":"Hospital de Cancer de Mato Grosso — HCMT","municipio":"Cuiabá","regional":"1ª Regional — Cuiabá","tipo":"Hospital Especializado","porte":"Médio","leitos":140,"lat":-15.610,"lng":-56.080,"regulacao":{"UTI Adulto":"N2","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"N1","Ortopedia":"NC","Obstetrícia":"NC","Pediatria":"N2","Trauma":"NC","Queimados":"NC"}},
+{"id":37,"nome":"Hospital Regional de Poconé","municipio":"Poconé","regional":"9ª Regional — Cáceres","tipo":"Hospital Geral","porte":"Pequeno","leitos":38,"lat":-16.254,"lng":-56.621,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":38,"nome":"Hospital Regional de Mirassol d'Oeste","municipio":"Mirassol d'Oeste","regional":"9ª Regional — Cáceres","tipo":"Hospital Geral","porte":"Pequeno","leitos":40,"lat":-15.671,"lng":-58.097,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":39,"nome":"Hospital Regional de Jangada","municipio":"Jangada","regional":"5ª Regional — Diamantino","tipo":"Hospital Geral","porte":"Pequeno","leitos":30,"lat":-15.238,"lng":-56.486,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}},
+{"id":40,"nome":"Hospital Regional de Paranatinga","municipio":"Paranatinga","regional":"15ª Regional — Água Boa","tipo":"Hospital Geral","porte":"Pequeno","leitos":35,"lat":-14.428,"lng":-54.050,"regulacao":{"UTI Adulto":"NC","UTI Neonatal":"NC","Cardiologia":"NC","Neurologia":"NC","Oncologia":"NC","Ortopedia":"N3","Obstetrícia":"N3","Pediatria":"N3","Trauma":"N3","Queimados":"NC"}}
+];
+
+const corPorPorte = {
+  'Grande': '#ef4444',
+  'Médio': '#f97316',
+  'Pequeno': '#eab308'
+};
+
+let marcadores = [];
+let hospitalSelecionado = null;
+let mapaFiltrado = [...hospitais];
+
+const map = L.map('map', {
+  center: [-13.5, -55.5],
+  zoom: 6,
+  zoomControl: true
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap contributors © CARTO',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+function criarIcone(hospital) {
+  const cor = corPorPorte[hospital.porte] || '#64748b';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 14 22 14 22S28 23.333 28 14C28 6.268 21.732 0 14 0z" fill="${cor}" stroke="white" stroke-width="2"/>
+    <text x="14" y="19" text-anchor="middle" fill="white" font-size="13" font-weight="bold" font-family="Arial">+</text>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor: [0, -36],
+    className: ''
+  });
+}
+
+function nivelLabel(n) {
+  const map = {'N1':'Nível 1','N2':'Nível 2','N3':'Nível 3','NC':'Não Credenciado'};
+  return map[n] || n;
+}
+
+function nivelClass(n) {
+  const map = {'N1':'nivel-1','N2':'nivel-2','N3':'nivel-3','NC':'nivel-nc'};
+  return map[n] || 'nivel-nc';
+}
+
+function renderizarMarcadores() {
+  marcadores.forEach(m => map.removeLayer(m));
+  marcadores = [];
+  mapaFiltrado.forEach(h => {
+    const marker = L.marker([h.lat, h.lng], {icon: criarIcone(h)})
+      .addTo(map)
+      .bindPopup(`
+        <div class="popup-title">${h.nome}</div>
+        <div class="popup-info">
+          <strong>Município:</strong> ${h.municipio}<br>
+          <strong>Regional:</strong> ${h.regional}<br>
+          <strong>Tipo:</strong> ${h.tipo}<br>
+          <strong>Porte:</strong> ${h.porte}<br>
+          <strong>Leitos:</strong> ${h.leitos}
+        </div>
+      `, {maxWidth: 280});
+    marker.on('click', () => selecionarHospital(h));
+    marcadores.push(marker);
+  });
+}
+
+function selecionarHospital(h) {
+  hospitalSelecionado = h;
+  document.querySelectorAll('.hospital-card').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector(`[data-id="${h.id}"]`);
+  if (card) {
+    card.classList.add('selected');
+    card.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+  map.setView([h.lat, h.lng], 11, {animate: true});
+}
+
+function renderizarSidebar() {
+  const lista = document.getElementById('hospitalsList');
+  const totalU = document.getElementById('totalUnidades');
+  const totalL = document.getElementById('totalLeitos');
+  const totalR = document.getElementById('totalRegionais');
+  totalU.textContent = mapaFiltrado.length;
+  totalL.textContent = mapaFiltrado.reduce((s,h) => s + h.leitos, 0).toLocaleString('pt-BR');
+  const regionais = new Set(mapaFiltrado.map(h => h.regional));
+  totalR.textContent = regionais.size;
+  lista.innerHTML = mapaFiltrado.map(h => {
+    const esps = Object.entries(h.regulacao).filter(([,v]) => v !== 'NC').map(([k,v]) => `<span class="badge badge-${v.toLowerCase()}" style="background:#1a2e1a;color:#4ade80;border:1px solid #166534;font-size:.6rem;padding:1px 5px;border-radius:8px">${k}: ${v}</span>`).join(' ');
+    return `<div class="hospital-card" data-id="${h.id}" onclick="selecionarHospital(hospitais.find(x=>x.id===${h.id}))">
+      <h4>${h.nome}</h4>
+      <div class="meta">
+        <span class="badge badge-regional">${h.regional.split('—')[0].trim()}</span>
+        <span class="badge badge-porte">${h.porte}</span>
+        <span class="badge badge-tipo">${h.tipo}</span>
+        <span class="badge badge-leitos">${h.leitos} leitos</span>
+      </div>
+      ${esps ? `<div class="regulacao" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${esps}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function populaFiltroRegional() {
+  const sel = document.getElementById('filtroRegional');
+  const regionais = [...new Set(hospitais.map(h => h.regional))].sort();
+  regionais.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = r;
+    sel.appendChild(opt);
+  });
+}
+
+function aplicarFiltros() {
+  const regional = document.getElementById('filtroRegional').value;
+  const tipo = document.getElementById('filtroTipo').value;
+  const porte = document.getElementById('filtroPorte').value;
+  const esp = document.getElementById('filtroEspecialidade').value;
+  const busca = document.getElementById('busca').value.toLowerCase();
+  mapaFiltrado = hospitais.filter(h => {
+    if (regional && h.regional !== regional) return false;
+    if (tipo && h.tipo !== tipo) return false;
+    if (porte && h.porte !== porte) return false;
+    if (esp && h.regulacao[esp] === 'NC') return false;
+    if (busca && !h.nome.toLowerCase().includes(busca) && !h.municipio.toLowerCase().includes(busca)) return false;
+    return true;
+  });
+  renderizarSidebar();
+  renderizarMarcadores();
+}
+
+populaFiltroRegional();
+renderizarSidebar();
+renderizarMarcadores();
+</script>
+</body>
+</html>
